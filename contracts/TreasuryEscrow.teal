@@ -1,0 +1,51 @@
+#pragma version 5
+
+txn TypeEnum
+int axfer
+==
+bnz success
+global GroupSize
+int 5
+==
+gtxn 4 TypeEnum
+int axfer
+==
+&&
+gtxn 1 ApplicationID
+int 77872223
+==
+&&
+gtxn 2 AssetSender
+gtxn 4 AssetReceiver
+==
+&&
+int 0
+gtxn 2 AssetAmount
+int 997
+*
+int 1000
+/
+store 1
+int 0
+gtxn 2 AssetAmount
+load 1
+-
+store 2
+int 0
+gtxn 4 AssetAmount
+load 2
+==
+gtxn 4 XferAsset
+int 77872223
+==
+&&
+bnz success
+bz failed
+
+failed:
+int 0
+return
+
+success:
+int 1
+return
