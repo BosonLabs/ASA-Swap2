@@ -1,7 +1,8 @@
+
 #pragma version 4
 
-// Tinyman Validator App
-// Documentation: https://docs.tinyman.org
+// Element Validator App
+
 
 // Note: This code is written targeting TEAL 3 but using divmodw from TEAL4.
 // There are no back jumps, callsubs or other TEAL4 features used.
@@ -47,15 +48,15 @@
 // 202: excess_asset_2
 // 203: excess_liquidity_token
 
-
 // Deny Update, Delete, CloseOut
 txn OnCompletion
 int UpdateApplication
 ==
+bnz updating
 txn OnCompletion
 int DeleteApplication
 ==
-||
+
 txn OnCompletion
 int CloseOut
 ==
@@ -312,16 +313,6 @@ redeem_fees:
 
 // Redeem
 redeem:
-    // ensure Accounts[1] is the Pooler/Swapper (receiver of txn 2)
-    gtxn 2 AssetReceiver
-    gtxn 2 Receiver
-    gtxn 2 TypeEnum
-    int pay
-    == // if algo
-    select
-    txna Accounts 1
-    ==
-    assert
     // ensure redeeming amount > 0
     load 52 // gtxn_2_amount
     assert
@@ -402,10 +393,10 @@ swap_mint_burn:
     byte "p1"
     app_local_get // price1
     load 250 // time_delta
-    mulw 
+    mulw
     // high
     // low
-    swap 
+    swap
     // low
     // high
     // if high > 0 then (price1 * time_delta) is > uint64. skip the oracle update in this case
@@ -430,10 +421,10 @@ swap_mint_burn:
     byte "p2"
     app_local_get // price2
     load 250 // time_delta
-    mulw 
+    mulw
     // high
     // low
-    swap 
+    swap
     // low
     // high
     // if high > 0 then (price2 * time_delta) is > uint64. skip the oracle update in this case
@@ -449,7 +440,7 @@ swap_mint_burn:
     pop
     pop
     pop
-    
+
 
     int 0
     byte "c1"
@@ -507,7 +498,7 @@ swap_mint_burn:
     // ensure the asset in gtxn4 really is the liquidity token
     load 103
     gtxn 4 XferAsset
-    == 
+    ==
     assert
 
 mint_burn__1:
@@ -541,12 +532,11 @@ mint_burn__1:
 // excess_asset2_amount += excess_asset_2
 
 // burn
-    // ensure Accounts[1] is the Pooler (sender of txn 4)
-    txna Accounts 1
-    gtxn 4 Sender
-    ==
-    assert
-
+    int 0
+    gtxn 2 XferAsset
+    gtxn 3 XferAsset
+    !=
+    bz fail
     gtxn 4 AssetAmount // burn_amount
     load 71 // asset1_supply
     mulw // burn_amount * asset1_supply
@@ -616,7 +606,7 @@ mint_burn__1:
 // Mint
 // asset1_amount = gtxn 2 AssetAmount
 // asset2_amount = gtxn 3 AssetAmount
-// liquidity_token_amount = gtxn 4 AssetAmount 
+// liquidity_token_amount = gtxn 4 AssetAmount
 
 
 // if first minting:
@@ -638,12 +628,6 @@ mint_burn__1:
 // put excess_liquidity_token_amount += excess_liquidity_token
 
 mint:
-    // ensure Accounts[1] is the Pooler (sender of txn 2)
-    txna Accounts 1
-    gtxn 2 Sender
-    ==
-    assert
-
     load 71 // asset1_supply
     load 52 // gtxn_2_amount
     +
@@ -772,7 +756,7 @@ mint:
     load 241 // amount_product_lo
     <= // compare lows: minted_squared_lo <= amount_product_lo
     assert
-    
+
     mint__first_minting_1:
     // assert (minted_liquidity_token + 1) * (minted_liquidity_token + 1) > asset1_amount * asset2_amount
     gtxn 4 AssetAmount // liquidity_token_amount
@@ -820,7 +804,7 @@ mint:
 // Swap
 
     // k = input_supply * output_supply
-    // ignoring fees, k must remain constant 
+    // ignoring fees, k must remain constant
     // (input_supply + asset_in) * (output_supply - amount_out) = k
 
 	// if fixed input:
@@ -855,13 +839,7 @@ mint:
 
 
 swap:
-    // ensure Accounts[1] is the Swapper (sender of txn 2)
-    txna Accounts 1
-    gtxn 2 Sender
-    ==
-    assert
-
-    // Is asset_in == asset1 and asset_out == asset2? 
+    // Is asset_in == asset1 and asset_out == asset2?
     gtxn 2 XferAsset
     load 101 // asset1_id
     ==
@@ -873,7 +851,7 @@ swap:
     store 100 // is_asset_in_asset1
     bnz swap__asset1_in
 
-    // Is asset_in == asset2 and asset_out == asset1? 
+    // Is asset_in == asset2 and asset_out == asset1?
     gtxn 2 XferAsset
     load 102 // asset2_id
     ==
@@ -921,7 +899,7 @@ swap:
     *
     load 18 // input_supply
     mulw // (asset_out_amount * 1000 * input_suppply)
-    
+
     load 19 // output_supply
     load 53 // gtxn_3_amount: asset_out_amount
     -
@@ -940,7 +918,7 @@ swap:
     // calculated_amount_in = ((asset_out_amount * 1000 * input_suppply) / ((output_supply - asset_out_amount) * 997)) + 1
     dup
     store 21 // calculated_amount_in
-    
+
     // ensure calculated_amount_in > 0
     int 0
     >
@@ -998,10 +976,16 @@ swap__fi:
     // calculated_amount_out = output_supply - (k / (input_supply + asset_in_amount_minus_fee))
     // This can be rewritten to reduce precision loss with integer division:
     //  calculated_amount_out = (asset_in_amount * 997 * output_supply) / ((input_supply * 1000) + (asset_in_amount * 997))
+    int 0
+    byte "Escrow"
+    app_global_get
+    gtxn 4 Sender
+    ==
+    assert
 
     load 52 // gtxn_2_amount: asset_in_amount
     dup
-    store 21 // calculated_amount_in == asset_in_amount 
+    store 21 // calculated_amount_in == asset_in_amount
     int 997
     *
     load 19 // output_supply
@@ -1079,17 +1063,17 @@ calculate_protocol_fee:
     // calculate amount owed as protocol fees and issue corresponding liquidity_tokens:
     // protocol_fee_portion = asset_in_amount * 0.05%
     // protocol_fee_portion = (asset_in_amount * 5) / 10000
-    
+
     // the protocol is granted a share of the pool for half of this amount because it's a 50/50 pool:
     // protocol_fee_asset_in_amount = (asset_in_amount * 5) / 20000
     // protocol_fee_liquidity_tokens = issued_liquidity_tokens * (protocol_fee_asset_in_amount / input_supply)
-    
+
     // refactor to reduce rounding errors:
     // protocol_fee_liquidity_tokens = (issued_liquidity_tokens * (asset_in_amount * 5)) / (20000 * input_supply)
 
     load 21 // asset_in_amount
     int 5
-    * 
+    *
     load 4 // issued_liquidity_tokens
     mulw
     int 20000
@@ -1130,7 +1114,7 @@ bootstrap:
     app_local_put // asset2ID
 
     // Ensure that the AssetName of the liquidity asset ends with "{asset1_unit_name}-{asset2_unit_name}"
-    // The Pool LogicSig ensures that it starts with "TinymanPool1.1 "
+    // The Pool LogicSig ensures that it starts with "Element Pool "
     load 101
     asset_params_get AssetUnitName
     assert // Note: This will fail if the asset has no unit name
@@ -1282,6 +1266,16 @@ update_local_state:
     update_local_state__3:
     int 1
     return
+
+updating:
+    txn Sender
+    global CreatorAddress
+    ==
+    bz fail
+    byte "Escrow"
+    txna ApplicationArgs 0
+    app_global_put
+    b success
 
 
 success:
